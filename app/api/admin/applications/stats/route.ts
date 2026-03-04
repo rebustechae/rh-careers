@@ -10,7 +10,10 @@ async function checkAuth() {
     return { error: "Unauthorized", status: 401 };
   }
 
-  const { data: { user }, error } = await supabaseAdmin.auth.getUser(accessToken);
+  const {
+    data: { user },
+    error,
+  } = await supabaseAdmin.auth.getUser(accessToken);
 
   if (error || !user) {
     return { error: "Unauthorized", status: 401 };
@@ -19,7 +22,6 @@ async function checkAuth() {
   return { user };
 }
 
-// GET application counts per job
 export async function GET() {
   try {
     const auth = await checkAuth();
@@ -29,24 +31,20 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin
       .from("applications")
-      .select("job_id");
+      .select("job_id")
+      .returns<{ job_id: string }[]>();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Count applications per job
-    const counts: Record<string, number> = {};
-    data?.forEach((app) => {
-      counts[app.job_id] = (counts[app.job_id] || 0) + 1;
-    });
+    const counts = data.reduce((acc: Record<string, number>, curr) => {
+      acc[curr.job_id] = (acc[curr.job_id] || 0) + 1;
+      return acc;
+    }, {});
 
     return NextResponse.json(counts);
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-

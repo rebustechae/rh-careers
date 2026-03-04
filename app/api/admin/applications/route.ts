@@ -7,6 +7,9 @@ const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 465,
   secure: true, 
+  pool: true,
+  maxConnections: 5,
+  maxMessages: 100,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -30,46 +33,54 @@ async function checkAuth() {
   return { user };
 }
 
-// GET all applications
 export async function GET(req: Request) {
   try {
     const auth = await checkAuth();
     if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     const { searchParams } = new URL(req.url);
-    const status = searchParams.get("status");
     const jobId = searchParams.get("jobId");
 
     let query = supabaseAdmin
       .from("applications")
-      .select(`*, jobs (id, title, department)`)
+      .select(`
+        id,
+        full_name,
+        email,
+        status,
+        created_at,
+        resume_url,
+        jobs (
+          title
+        )
+      `)
       .order("created_at", { ascending: false });
 
-    if (status) query = query.eq("status", status);
-    if (jobId) query = query.eq("job_id", jobId);
+    if (jobId) {
+      query = query.eq("job_id", jobId);
+    }
 
     const { data, error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const transformedData = data?.map((app: any) => ({
+    if (error) throw error;
+
+    // Format data for the frontend component
+    const formattedData = data.map((app: any) => ({
       id: app.id,
       name: app.full_name,
-      jobPosition: app.jobs?.title || "Unknown",
-      dateApplied: app.created_at,
-      status: app.status || "Pending",
       email: app.email,
+      jobPosition: app.jobs?.title || "Unknown Position",
+      dateApplied: app.created_at,
+      status: app.status,
       resumeUrl: app.resume_url,
-      message: app.message,
-      note: app.admin_note || "",
     }));
 
-    return NextResponse.json(transformedData || []);
+    return NextResponse.json(formattedData);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// PATCH update application (Status, Note, or Contact Details)
 export async function PATCH(req: Request) {
   try {
     const auth = await checkAuth();
@@ -80,10 +91,15 @@ export async function PATCH(req: Request) {
 
     if (!id) return NextResponse.json({ error: "Application ID required" }, { status: 400 });
 
-    // Fetch existing data for email context
     const { data: application, error: fetchError } = await supabaseAdmin
       .from("applications")
-      .select(`*, jobs ( title )`)
+      .select(`
+        full_name, 
+        email, 
+        jobs ( 
+          title 
+        )
+      `)
       .eq("id", id)
       .single();
 
@@ -91,7 +107,6 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
 
-    // Build update object dynamically
     const updateData: any = {};
     if (status !== undefined) updateData.status = status;
     if (note !== undefined) updateData.admin_note = note;
@@ -105,52 +120,55 @@ export async function PATCH(req: Request) {
 
     if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
-    // Handle Email Notifications for status changes
     if (status && ["Accepted", "Shortlisted", "Rejected"].includes(status)) {
-      const jobTitle = application.jobs?.title || "the position";
-      const candidateName = name || application.full_name || "Candidate"; // Fix: Use correct field
-      const targetEmail = email || application.email;
+      const runEmailTask = async () => {
+        const jobData = application.jobs as unknown as { title: string } | null;
+        const jobTitle = jobData?.title || "the position";
+        const candidateName = name || application.full_name || "Candidate";
+        const targetEmail = email || application.email;
 
-      let subject = "";
-      let htmlContent = "";
+        let subject = "";
+        let htmlContent = "";
 
-      if (status === "Accepted") {
-        subject = `Congratulations! Your application for ${jobTitle} has been accepted`;
-        htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0;">
+        if (status === "Accepted") {
+          subject = `Congratulations! Your application for ${jobTitle} has been accepted`;
+          htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0;">
             <h2 style="color: #059669;">Congratulations, ${candidateName}!</h2>
             <p>We are pleased to inform you that your application for <strong>${jobTitle}</strong> has been accepted!</p>
             <p>Our team will contact you shortly for next steps.</p>
             <p style="margin-top: 30px; color: #666;">Best regards,<br>HR Team | Rebus Holdings</p>
           </div>`;
-      } else if (status === "Shortlisted") {
-        subject = `Update: You've been shortlisted for ${jobTitle}`;
-        htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0;">
+        } else if (status === "Shortlisted") {
+          subject = `Update on your application for ${jobTitle}`;
+          htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0;">
             <h2 style="color: #10b981;">Application Update</h2>
             <p>Dear ${candidateName},</p>
             <p>Your application for <strong>${jobTitle}</strong> has been shortlisted! We will contact you soon regarding the next steps.</p>
             <p style="margin-top: 30px; color: #666;">Best regards,<br>HR Team | Rebus Holdings</p>
           </div>`;
-      } else if (status === "Rejected") {
-        subject = `Update on your application for ${jobTitle}`;
-        htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0;">
-            <h2 style="color: #475569;">Application Update</h2>
+        } else if (status === "Rejected") {
+          subject = `Update on your application for ${jobTitle}`;
+          htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0;">
+            <h2 style="color: #dc2626;">Application Update</h2>
             <p>Dear ${candidateName},</p>
             <p>After careful consideration, we have decided to move forward with other candidates for the <strong>${jobTitle}</strong> position.</p>
             <p>We encourage you to apply for future roles at Rebus Holdings.</p>
             <p style="margin-top: 30px; color: #666;">Best regards,<br>HR Team | Rebus Holdings</p>
           </div>`;
-      }
+        }
 
-      try {
-        await transporter.sendMail({
-          from: `"Rebus HR" <${process.env.EMAIL_USER}>`,
-          to: targetEmail,
-          subject,
-          html: htmlContent,
-        });
-      } catch (err) {
-        console.error("❌ Email failed but DB updated:", err);
-      }
+        try {
+          await transporter.sendMail({
+            from: `"Rebus Careers" <${process.env.EMAIL_USER}>`,
+            to: targetEmail,
+            subject,
+            html: htmlContent,
+          });
+        } catch (err) {
+          console.error("Delayed Email Error:", err);
+        }
+      };
+      runEmailTask();
     }
 
     return NextResponse.json({ success: true });
@@ -159,7 +177,6 @@ export async function PATCH(req: Request) {
   }
 }
 
-// DELETE application
 export async function DELETE(req: Request) {
   try {
     const auth = await checkAuth();
@@ -171,8 +188,8 @@ export async function DELETE(req: Request) {
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
     const { error } = await supabaseAdmin.from("applications").delete().eq("id", id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

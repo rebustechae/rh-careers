@@ -19,7 +19,7 @@ export function Button({
   const baseStyles = "font-sans font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
   
   const variants = {
-    primary: "bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-900",
+    primary: "bg-primary text-white hover:bg-primary/80 focus:primary/90",
     secondary: "bg-slate-700 text-white hover:bg-slate-600 focus:ring-slate-700",
     outline: "border-2 border-slate-300 text-slate-700 hover:bg-slate-50 focus:ring-slate-300",
     ghost: "text-slate-700 hover:bg-slate-100 focus:ring-slate-300",

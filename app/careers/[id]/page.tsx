@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, DragEvent } from "react";
+import { useEffect, useState, DragEvent, useRef } from "react";
 import { useParams } from "next/navigation";
 import { ChevronLeft, Upload, FileText, X, BadgeCheck } from "lucide-react";
 import Link from "next/link";
@@ -18,20 +18,39 @@ export default function JobDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
-  // State to track if a file is being dragged over the upload area
   const [isDragging, setIsDragging] = useState(false);
 
-  useEffect(() => {
-    fetch(`/api/jobs/${id}`)
-      .then((res) => res.json())
-      .then((data) => setJob(data));
-  }, [id]);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Unified file validation for both Click and Drag/Drop
+  useEffect(() => {
+
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    abortControllerRef.current = new AbortController();
+
+    fetch(`/api/jobs/${id}`, { signal: abortControllerRef.current.signal })
+      .then((res) => res.json())
+      .then((data) => setJob(data))
+      .catch((err) => {
+        if (err.name !== "AbortError") console.error("Fetch error:", err);
+      });
+
+    return () => abortControllerRef.current?.abort();
+  }, [id]);
+ 
   const validateAndSetFile = (file: File) => {
+    const allowedTypes = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      alert("Invalid file type. Please upload a PDF or Word document.");
+      return;
+    }
+
     if (file.size > 5 * 1024 * 1024) {
-      alert("File is too large. Please upload a PDF under 5MB.");
+      alert("File is too large. Please upload a file under 5MB.");
       return;
     }
     setSelectedFile(file);
@@ -43,7 +62,6 @@ export default function JobDetailPage() {
     }
   };
 
-  // --- Drag & Drop Handlers ---
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -68,17 +86,25 @@ export default function JobDetailPage() {
 
   const handleApplication = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!selectedFile) return alert("Please upload a resume");
+    if (!selectedFile || uploading) return;
+
     setUploading(true);
 
     const formData = new FormData(e.currentTarget);
     const fileExt = selectedFile.name.split(".").pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `resumes/${fileName}`;
+
+    const timestamp = Date.now();
+    const fileName = `${timestamp}-${Math.random()
+      .toString(36)
+      .substring(7)}.${fileExt}`;
+    const filePath = `${id}/${fileName}`; 
 
     const { error: uploadError } = await supabase.storage
       .from("resumes")
-      .upload(filePath, selectedFile);
+      .upload(filePath, selectedFile, {
+        cacheControl: "3600",
+        upsert: false,
+      });
 
     if (uploadError) {
       setUploading(false);
@@ -89,20 +115,29 @@ export default function JobDetailPage() {
       data: { publicUrl },
     } = supabase.storage.from("resumes").getPublicUrl(filePath);
 
-    const res = await fetch("/api/apply", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        job_id: id,
-        full_name: formData.get("full_name"),
-        email: formData.get("email"),
-        resume_url: publicUrl,
-        message: formData.get("message"),
-      }),
-    });
+    try {
+      const res = await fetch("/api/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: id,
+          full_name: formData.get("full_name"),
+          email: formData.get("email"),
+          resume_url: publicUrl,
+          message: formData.get("message"),
+        }),
+      });
 
-    if (res.ok) setSubmitted(true);
-    setUploading(false);
+      if (res.ok) {
+        setSubmitted(true);
+      } else {
+        throw new Error("Application failed to save");
+      }
+    } catch (err) {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   if (!job)
@@ -258,7 +293,7 @@ export default function JobDetailPage() {
                         name="full_name"
                         placeholder="e.g. John Doe"
                         required
-                        className="w-full p-3 border border-slate-200 rounded-lg outline-primary transition-all"
+                        className="w-full p-3 border border-slate-200 rounded-lg outline-primary transition-all mt-2"
                       />
                     </div>
 
@@ -275,11 +310,10 @@ export default function JobDetailPage() {
                         type="email"
                         placeholder="john@example.com"
                         required
-                        className="w-full p-3 border border-slate-200 rounded-lg outline-primary transition-all"
+                        className="w-full p-3 border border-slate-200 rounded-lg outline-primary transition-all mt-2"
                       />
                     </div>
 
-                    {/* Resume Upload*/}
                     <div className="space-y-1.5">
                       <label className="text-sm font-semibold text-slate-700 ml-1">
                         Curriculum Vitae (CV) or Resume{" "}
@@ -291,7 +325,7 @@ export default function JobDetailPage() {
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
-                            className={`border-2 border-dashed p-8 text-center rounded-lg transition-all cursor-pointer relative ${
+                            className={`border-2 border-dashed p-8 text-center rounded-lg transition-all cursor-pointer relative mt-2 ${
                               isDragging
                                 ? "border-primary bg-primary/5 scale-[1.01]"
                                 : "border-slate-200 group-hover:border-primary"
@@ -304,7 +338,7 @@ export default function JobDetailPage() {
                               required
                               accept=".pdf,.doc,.docx"
                               onChange={handleFileChange}
-                              className="absolute inset-0 opacity-0 cursor-pointer"
+                              className="absolute inset-0 opacity-0 cursor-pointer mt-2"
                             />
                             <Upload
                               className={`mx-auto mb-2 transition-colors ${
@@ -323,7 +357,7 @@ export default function JobDetailPage() {
                             </p>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-between p-4 bg-slate-50 border border-primary/30 rounded-lg animate-in fade-in zoom-in duration-200">
+                          <div className="flex items-center justify-between p-4 bg-slate-50 border border-primary/30 rounded-lg animate-in fade-in zoom-in duration-200 mt-2">
                             <div className="flex items-center gap-3">
                               <div className="p-2 bg-primary/10 rounded-lg">
                                 <FileText className="text-primary size-6" />
@@ -362,11 +396,12 @@ export default function JobDetailPage() {
                         name="message"
                         placeholder="Tell us why you're a good fit..."
                         rows={4}
-                        className="w-full p-3 border border-slate-200 rounded-lg outline-primary transition-all"
+                        className="w-full p-3 border border-slate-200 rounded-lg outline-primary transition-all mt-2"
                       />
                     </div>
 
                     <button
+                      type="submit"
                       disabled={uploading}
                       className="w-full bg-primary text-white py-4 rounded-xl font-semibold hover:bg-primary/90 disabled:bg-slate-300 transition-all active:scale-[0.98]"
                     >

@@ -11,7 +11,6 @@ type JobFormData = {
   vacancies: number;
   employment_type: string;
   work_mode: string;
-  description: string;
   requirements: string[];
   responsibilities: string[];
 };
@@ -32,7 +31,6 @@ export function JobForm({ onSubmit, onCancel, initialData, isEdit = false }: Job
     vacancies: initialData?.vacancies || 1,
     employment_type: initialData?.employment_type || "",
     work_mode: initialData?.work_mode || "",
-    description: initialData?.description || "",
     requirements: initialData?.requirements && initialData.requirements.length > 0 ? initialData.requirements : [""],
     responsibilities: initialData?.responsibilities && initialData.responsibilities.length > 0 ? initialData.responsibilities : [""],
   });
@@ -87,7 +85,7 @@ export function JobForm({ onSubmit, onCancel, initialData, isEdit = false }: Job
   const canProceed = () => {
     if (step === 1) return formData.title.trim() !== "" && formData.department !== "";
     if (step === 2) return formData.location.trim() !== "" && formData.employment_type !== "" && formData.work_mode !== "";
-    if (step === 3) return formData.description.trim() !== "";
+    if (step === 3) return formData.requirements.some(r => r.trim() !== "" || formData.responsibilities.some(r => r.trim() !== ""));
     return false;
   };
 
