@@ -2,101 +2,86 @@ import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { supabaseAdmin } from "@/app/lib/supabase-admin";
 import { cookies } from "next/headers";
+import { appConfig } from "@/app/lib/config";
+import { getEmailTemplate } from "@/app/lib/email-templates";
+import { hasRequiredFields } from "@/app/lib/validation";
+import { ERROR_MESSAGES, EMAIL_CONFIG } from "@/app/lib/constants";
+import { errorResponse, logError } from "@/app/lib/api-utils";
+import { EmailPayload } from "@/app/types";
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+/**
+ * Email transporter configuration
+ */
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    host: EMAIL_CONFIG.HOST,
+    port: EMAIL_CONFIG.PORT,
+    secure: EMAIL_CONFIG.SECURE,
+    auth: {
+      user: appConfig.email.user,
+      pass: appConfig.email.pass,
+    },
+  });
+};
 
-async function checkAuth() {
+/**
+ * Validates user authentication via session token
+ */
+async function validateAuth() {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("sb-access-token")?.value;
-  if (!accessToken) return { error: "Unauthorized", status: 401 };
+
+  if (!accessToken) {
+    return { valid: false, error: ERROR_MESSAGES.UNAUTHORIZED, status: 401 };
+  }
 
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(accessToken);
-  if (error || !user) return { error: "Invalid session", status: 401 };
 
-  return { user };
+  if (error || !user) {
+    return { valid: false, error: ERROR_MESSAGES.INVALID_SESSION, status: 401 };
+  }
+
+  return { valid: true, user };
 }
 
+/**
+ * POST /api/admin/applications/send-email
+ * Sends email notification to candidate about application status
+ */
 export async function POST(req: Request) {
   try {
-    const auth = await checkAuth();
-    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
-    const body = await req.json();
-    const { applicationId, status, candidateName, candidateEmail, jobTitle } = body;
-
-    // Validation
-    if (!applicationId || !status || !candidateEmail || !candidateName || !jobTitle) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    const auth = await validateAuth();
+    if (!auth.valid) {
+      return errorResponse(auth.error, auth.status);
     }
 
-    let subject = "";
-    let htmlContent = "";
+    const body = await req.json() as EmailPayload;
 
-    // Define Templates based on Status
-    switch (status) {
-      case "Accepted":
-        subject = `Congratulations! Your application for ${jobTitle} has been accepted`;
-        htmlContent = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0;">
-            <h2 style="color: #059669;">Congratulations, ${candidateName}!</h2>
-            <p>We are pleased to inform you that your application for <strong>${jobTitle}</strong> has been accepted!</p>
-            <p>Our team will contact you shortly for next steps.</p>
-            <p style="margin-top: 30px; color: #666;">Best regards,<br>HR Team | Rebus Holdings</p>
-          </div>`;
-        break;
-
-      case "Shortlisted":
-        subject = `Update on your application for ${jobTitle}`;
-        htmlContent = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0;">
-            <h2 style="color: #10b981;">Application Update</h2>
-            <p>Dear ${candidateName},</p>
-            <p>Your application for <strong>${jobTitle}</strong> has been shortlisted! We will contact you soon regarding the next steps.</p>
-            <p style="margin-top: 30px; color: #666;">Best regards,<br>HR Team | Rebus Holdings</p>
-          </div>`;
-        break;
-
-      case "Rejected":
-        subject = `Update on your application for ${jobTitle}`;
-        htmlContent = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0;">
-            <h2 style="color: #dc2626;">Application Update</h2>
-            <p>Dear ${candidateName},</p>
-            <p>After careful consideration, we have decided to move forward with other candidates for the <strong>${jobTitle}</strong> position.</p>
-            <p>We encourage you to apply for future roles at Rebus Holdings.</p>
-            <p style="margin-top: 30px; color: #666;">Best regards,<br>HR Team | Rebus Holdings</p>
-          </div>`;
-        break;
-
-      default:
-        return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    const requiredFields = ["applicationId", "status", "candidateEmail", "candidateName", "jobTitle"];
+    if (!hasRequiredFields(body, requiredFields)) {
+      return errorResponse(ERROR_MESSAGES.MISSING_FIELDS, 400);
     }
 
-    // Send the Email
+    const { status, candidateName, candidateEmail, jobTitle } = body;
+
+    const emailTemplate = getEmailTemplate(status, candidateName, jobTitle);
+
     try {
+      const transporter = createTransporter();
       await transporter.sendMail({
-        from: `"Rebus Holdings" <${process.env.EMAIL_USER}>`,
+        from: `"${EMAIL_CONFIG.FROM_NAME}" <${EMAIL_CONFIG.FROM_EMAIL}>`,
         to: candidateEmail,
-        subject: subject,
-        html: htmlContent,
+        subject: emailTemplate.subject,
+        html: emailTemplate.htmlContent,
       });
 
-      console.log(`✅ Email sent to candidate: ${candidateEmail}`);
       return NextResponse.json({ success: true });
-    } catch (emailError: any) {
-      console.error("❌ Nodemailer failed:", emailError.message);
-      return NextResponse.json({ error: "Email service failed" }, { status: 500 });
+    } catch (emailError) {
+      logError("Email sending failed", emailError, { candidateEmail, jobTitle });
+      return errorResponse(ERROR_MESSAGES.EMAIL_FAILED, 500);
     }
-
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    logError("Send email endpoint", error);
+    return errorResponse(ERROR_MESSAGES.INTERNAL_ERROR, 500);
   }
 }

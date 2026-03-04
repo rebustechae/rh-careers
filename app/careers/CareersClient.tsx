@@ -4,43 +4,59 @@ import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { MapPin, Briefcase, Search, FilterX } from "lucide-react";
+import { Job } from "@/app/types";
+import { API_ENDPOINTS } from "@/app/lib/constants";
 
+/**
+ * CareersClient Component
+ * Displays available job listings with filtering by department and location
+ */
 export default function CareersClient() {
-  const [jobs, setJobs] = useState([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Filter States
   const [selectedDept, setSelectedDept] = useState("All Departments");
   const [selectedLoc, setSelectedLoc] = useState("All Locations");
 
   useEffect(() => {
-    async function getJobs() {
-      try {
-        const res = await fetch("/api/jobs");
-        const data = await res.json();
-        setJobs(data);
-      } catch (error) {
-        console.error("Error fetching jobs:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    getJobs();
+    fetchJobs();
   }, []);
 
-  // Generate unique filter options dynamically based on the data
+  /**
+   * Fetches all active jobs from the API
+   */
+  const fetchJobs = async () => {
+    try {
+      const res = await fetch(API_ENDPOINTS.JOBS);
+      const data = await res.json();
+      setJobs(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching jobs:", error);
+      setJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Dynamically generates unique departments from jobs
+   */
   const departments = useMemo(
-    () => ["All Departments", ...new Set(jobs.map((j: any) => j.department))],
+    () => ["All Departments", ...new Set(jobs.map((j) => j.department))],
     [jobs]
   );
 
+  /**
+   * Dynamically generates unique locations from jobs
+   */
   const locations = useMemo(
-    () => ["All Locations", ...new Set(jobs.map((j: any) => j.location))],
+    () => ["All Locations", ...new Set(jobs.map((j) => j.location))],
     [jobs]
   );
 
-  // Filter Logic
-  const filteredJobs = jobs.filter((job: any) => {
+  /**
+   * Filters jobs based on selected department and location
+   */
+  const filteredJobs = jobs.filter((job) => {
     const matchDept =
       selectedDept === "All Departments" || job.department === selectedDept;
     const matchLoc =
@@ -151,7 +167,7 @@ export default function CareersClient() {
         {/* Jobs Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-0 md:px-12">
           {filteredJobs.length > 0 ? (
-            filteredJobs.map((job: any) => (
+            filteredJobs.map((job) => (
               <motion.div
                 key={job.id}
                 layout
@@ -166,7 +182,7 @@ export default function CareersClient() {
                       {job.department}
                     </span>
                     <span className="text-primary text-[10px] font-medium uppercase px-2 py-1">
-                      {job.vacancies} {job.vacancies > 1 ? "Vacancies" : "Vacancy "}
+                      {job.vacancies} {job.vacancies > 1 ? "Vacancies" : "Vacancy"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-primary/70 text-xs md:text-sm font-sans mb-8">
@@ -197,8 +213,7 @@ export default function CareersClient() {
 
         <footer className="mt-16 border-t border-gray-200 py-6 flex justify-center">
           <span className="text-xs md:text-sm text-gray-400">
-            {" "}
-            © 2026 Rebus Holdings{" "}
+            © 2026 Rebus Holdings
           </span>
         </footer>
       </div>

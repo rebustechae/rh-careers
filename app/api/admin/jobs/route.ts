@@ -1,31 +1,40 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/app/lib/supabase-admin";
 import { cookies } from "next/headers";
+import { logError, errorResponse } from "@/app/lib/api-utils";
+import { hasRequiredFields, isValidJobForm } from "@/app/lib/validation";
+import { ERROR_MESSAGES, SUCCESS_MESSAGES } from "@/app/lib/constants";
+import { Job } from "@/app/types";
 
-// Helper to check authentication
-async function checkAuth() {
+/**
+ * Validates user authentication via session token
+ */
+async function validateAuth() {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("sb-access-token")?.value;
 
   if (!accessToken) {
-    return { error: "Unauthorized", status: 401 };
+    return { valid: false, error: ERROR_MESSAGES.UNAUTHORIZED, status: 401 };
   }
 
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(accessToken);
 
   if (error || !user) {
-    return { error: "Unauthorized", status: 401 };
+    return { valid: false, error: ERROR_MESSAGES.UNAUTHORIZED, status: 401 };
   }
 
-  return { user };
+  return { valid: true, user };
 }
 
-// GET all jobs (including inactive)
+/**
+ * GET /api/admin/jobs
+ * Retrieves all jobs (including inactive ones)
+ */
 export async function GET() {
   try {
-    const auth = await checkAuth();
-    if (auth.error) {
-      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    const auth = await validateAuth();
+    if (!auth.valid) {
+      return errorResponse(auth.error, auth.status);
     }
 
     const { data, error } = await supabaseAdmin
@@ -34,24 +43,26 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      logError("Failed to fetch jobs", error);
+      return errorResponse(ERROR_MESSAGES.FETCH_FAILED, 500);
     }
 
     return NextResponse.json(data || []);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    logError("GET /api/admin/jobs", error);
+    return errorResponse(ERROR_MESSAGES.INTERNAL_ERROR, 500);
   }
 }
 
-// POST create new job
+/**
+ * POST /api/admin/jobs
+ * Creates a new job posting
+ */
 export async function POST(req: Request) {
   try {
-    const auth = await checkAuth();
-    if (auth.error) {
-      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    const auth = await validateAuth();
+    if (!auth.valid) {
+      return errorResponse(auth.error, auth.status);
     }
 
     const body = await req.json();
@@ -67,17 +78,12 @@ export async function POST(req: Request) {
       is_active = true,
     } = body;
 
-    if (!title || !department) {
-      return NextResponse.json(
-        { error: "Title and department are required" },
-        { status: 400 }
-      );
+    const requiredFields = ["title", "department", "location", "employment_type", "work_mode", "description"];
+    if (!hasRequiredFields(body, requiredFields)) {
+      return errorResponse(ERROR_MESSAGES.MISSING_FIELDS, 400);
     }
 
-    // Generate a UUID for the job ID
     const jobId = crypto.randomUUID();
-
-    console.log("Creating job with data:", body);
 
     const { data, error } = await supabaseAdmin
       .from("jobs")
@@ -99,28 +105,18 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
-      console.error("Supabase error creating job:", error);
-      return NextResponse.json(
-        { error: error.message || "Failed to create job in database" },
-        { status: 500 }
-      );
+      logError("Failed to create job", error);
+      return errorResponse(ERROR_MESSAGES.CREATE_FAILED, 500);
     }
 
     if (!data) {
-      console.error("No data returned from insert");
-      return NextResponse.json(
-        { error: "Job was not created" },
-        { status: 500 }
-      );
+      return errorResponse(ERROR_MESSAGES.CREATE_FAILED, 500);
     }
 
-    console.log("Job created successfully:", data);
     return NextResponse.json(data, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    logError("POST /api/admin/jobs", error);
+    return errorResponse(ERROR_MESSAGES.INTERNAL_ERROR, 500);
   }
 }
 

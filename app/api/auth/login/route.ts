@@ -1,38 +1,39 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { supabaseAdmin } from "@/app/lib/supabase-admin";
+import { createClient } from "@/app/lib/supabase-server";
+import { logError, errorResponse } from "@/app/lib/api-utils";
+import { ERROR_MESSAGES } from "@/app/lib/constants";
 
+/**
+ * POST /api/auth/login
+ * Authenticates user with email and password
+ */
 export async function POST(req: Request) {
   try {
     const { email, password } = await req.json();
 
     if (!email || !password) {
-      return NextResponse.json(
-        { error: "Email and password are required" },
-        { status: 400 }
-      );
+      return errorResponse(ERROR_MESSAGES.MISSING_FIELDS, 400);
     }
 
-    const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+    const supabase = await createClient();
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 401 }
-      );
+      logError("Login authentication failed", error);
+      return errorResponse(ERROR_MESSAGES.UNAUTHORIZED, 401);
     }
 
     if (!data.session) {
-      return NextResponse.json(
-        { error: "Failed to create session" },
-        { status: 500 }
-      );
+      return errorResponse("Failed to create session", 500);
     }
 
     const cookieStore = await cookies();
+
     cookieStore.set("sb-access-token", data.session.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -51,11 +52,8 @@ export async function POST(req: Request) {
       success: true,
       user: data.user,
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+  } catch (error) {
+    logError("POST /api/auth/login", error);
+    return errorResponse(ERROR_MESSAGES.INTERNAL_ERROR, 500);
   }
 }
-

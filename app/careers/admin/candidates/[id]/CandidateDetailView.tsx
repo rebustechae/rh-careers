@@ -175,7 +175,7 @@ export function CandidateDetailView() {
         </div>
       </div>
 
-      {/* Right Sidebar - Details */}
+      {/* Right Sidebar */}
       <div className="w-85 border-l border-slate-200 bg-white overflow-y-auto p-6 space-y-8">
         {/* Status Card */}
         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">

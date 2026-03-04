@@ -1,11 +1,25 @@
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/app/lib/supabase-admin";
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import { appConfig } from "@/app/lib/config";
+import { logError, errorResponse } from "@/app/lib/api-utils";
+import { isValidApplication } from "@/app/lib/validation";
+import { EMAIL_CONFIG, ERROR_MESSAGES } from "@/app/lib/constants";
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+/**
+ * Creates email transporter for sending notifications
+ */
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    host: EMAIL_CONFIG.HOST,
+    port: EMAIL_CONFIG.PORT,
+    secure: EMAIL_CONFIG.SECURE,
+    auth: {
+      user: appConfig.email.user,
+      pass: appConfig.email.pass,
+    },
+  });
+};
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -20,20 +34,28 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+/**
+ * POST /api/apply
+ * Submits a new job application and sends confirmation emails
+ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { job_id, full_name, email, resume_url, message } = body;
 
+    if (!isValidApplication({ job_id, full_name, email, resume_url })) {
+      return errorResponse(ERROR_MESSAGES.MISSING_FIELDS, 400);
+    }
+
     const { data: application, error: dbError } = await supabaseAdmin
       .from("applications")
-      .insert([{ job_id, full_name, email, resume_url, message }])
+      .insert([{ job_id, full_name, email, resume_url, message, status: "Applied" }])
       .select()
       .single();
 
     if (dbError) {
-      console.error("Database Error:", dbError.message);
-      return NextResponse.json({ error: dbError.message }, { status: 500 });
+      logError("Failed to create application", dbError);
+      return errorResponse(ERROR_MESSAGES.CREATE_FAILED, 500);
     }
     const runBackgroundTasks = async () => {
       try {

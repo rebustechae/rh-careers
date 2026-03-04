@@ -1,13 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { logError, errorResponse } from "@/app/lib/api-utils";
+import { appConfig } from "@/app/lib/config";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
+/**
+ * GET /api/jobs
+ * Retrieves all active jobs
+ */
 export async function GET() {
   try {
+    const supabase = createClient(
+      appConfig.supabase.url,
+      appConfig.supabase.anonKey
+    );
+
     const { data, error } = await supabase
       .from("jobs")
       .select("*")
@@ -15,16 +21,13 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Supabase Error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      logError("Supabase query failed", error);
+      return errorResponse(error.message, 500);
     }
 
     return NextResponse.json(data || []);
-  } catch (err) {
-    console.error("Server Error:", err);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+  } catch (error) {
+    logError("GET /api/jobs", error);
+    return errorResponse("Internal Server Error", 500);
   }
 }
