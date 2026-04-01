@@ -44,13 +44,30 @@ export const APPLICATION_STATUSES = [
   "Rejected",
 ] as const;
 
-// Email configuration
+// Email configuration (SMTP via Nodemailer)
+const parseBool = (value: string | undefined, fallback: boolean) => {
+  if (value == null) return fallback;
+  const v = value.trim().toLowerCase();
+  if (["true", "1", "yes", "y", "on"].includes(v)) return true;
+  if (["false", "0", "no", "n", "off"].includes(v)) return false;
+  return fallback;
+};
+
+const parseIntOr = (value: string | undefined, fallback: number) => {
+  if (value == null) return fallback;
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 export const EMAIL_CONFIG = {
-  HOST: "smtp.office365.com",
-  PORT: 587,
-  SECURE: false,
-  FROM_NAME: "Rebus Holdings",
-  FROM_EMAIL: "hr@rebus.ae",
+  // Default to Office 365 SMTP
+  HOST: process.env.EMAIL_HOST || "smtp.office365.com",
+  PORT: parseIntOr(process.env.EMAIL_PORT, 587),
+  SECURE: parseBool(process.env.EMAIL_SECURE, false),
+  FROM_NAME: process.env.EMAIL_FROM_NAME || "Rebus Holdings",
+  // Important: Office 365 will block "Send As" unless the authenticated user has permission.
+  // Default to EMAIL_USER to avoid SendAsDenied errors.
+  FROM_EMAIL: process.env.EMAIL_FROM_EMAIL || process.env.EMAIL_USER || "hr@rebus.ae",
 } as const;
 
 // UI Configuration

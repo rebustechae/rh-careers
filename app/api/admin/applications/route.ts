@@ -5,35 +5,22 @@ import { cookies } from "next/headers";
 import { appConfig } from "@/app/lib/config";
 import { getEmailTemplate } from "@/app/lib/email-templates";
 import { logError, errorResponse } from "@/app/lib/api-utils";
-import { ERROR_MESSAGES } from "@/app/lib/constants";   
+import { EMAIL_CONFIG, ERROR_MESSAGES } from "@/app/lib/constants";   
 
 /**
  * Creates email transporter
  */
 const createTransporter = () => {
   return nodemailer.createTransport({
-    host: "smtp.office365.com",
-    port: 587,
-    secure: false,
+    host: EMAIL_CONFIG.HOST,
+    port: EMAIL_CONFIG.PORT,
+    secure: EMAIL_CONFIG.SECURE,
     auth: {
       user: appConfig.email.user,
       pass: appConfig.email.pass,
     },
   });
 };
-
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true, 
-  pool: true,
-  maxConnections: 5,
-  maxMessages: 100,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
 
 /**
  * Validates user authentication via session token
@@ -183,8 +170,9 @@ export async function PATCH(req: Request) {
         }
 
         try {
+          const transporter = createTransporter();
           await transporter.sendMail({
-            from: `"Rebus Careers" <${process.env.EMAIL_USER}>`,
+            from: `"${EMAIL_CONFIG.FROM_NAME}" <${EMAIL_CONFIG.FROM_EMAIL}>`,
             to: targetEmail,
             subject,
             html: htmlContent,

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/app/lib/supabase-admin";
 import { cookies } from "next/headers";
 import { logError, errorResponse } from "@/app/lib/api-utils";
-import { hasRequiredFields, isValidJobForm } from "@/app/lib/validation";
+import { hasRequiredFields } from "@/app/lib/validation";
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from "@/app/lib/constants";
 import { Job } from "@/app/types";
 
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
       is_active = true,
     } = body;
 
-    const requiredFields = ["title", "department", "location", "employment_type", "work_mode", "description"];
+    const requiredFields = ["title", "department", "location", "employment_type", "work_mode"];
     if (!hasRequiredFields(body, requiredFields)) {
       return errorResponse(ERROR_MESSAGES.MISSING_FIELDS, 400);
     }

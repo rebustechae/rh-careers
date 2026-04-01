@@ -21,19 +21,6 @@ const createTransporter = () => {
   });
 };
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  pool: true, 
-  maxConnections: 5, 
-  maxMessages: 100,  
-  auth: {
-    user: process.env.EMAIL_USER, 
-    pass: process.env.EMAIL_PASS, 
-  },
-});
-
 /**
  * POST /api/apply
  * Submits a new job application and sends confirmation emails
@@ -65,9 +52,11 @@ export async function POST(req: Request) {
           .eq("id", job_id)
           .single();
 
+        const transporter = createTransporter();
+        const notifyTo = process.env.EMAIL_NOTIFY_TO || EMAIL_CONFIG.FROM_EMAIL;
         await transporter.sendMail({
-          from: `"Rebus Careers" <careers.rebus@gmail.com>`,
-          to: "careers.rebus@gmail.com",
+          from: `"${EMAIL_CONFIG.FROM_NAME}" <${EMAIL_CONFIG.FROM_EMAIL}>`,
+          to: notifyTo,
           subject: `New Application: ${full_name} for ${jobData?.title || "Open Role"}`,
           html: `
             <div style="font-family: sans-serif; color: #333; max-width: 600px; border: 1px solid #eee; padding: 20px;">
@@ -91,7 +80,6 @@ export async function POST(req: Request) {
             },
           ],
         });
-        console.log(`Notification sent for ${full_name}`);
       } catch (mailError) {
         console.error("Background Mail Error:", mailError);
       }
