@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 import { Button } from "@/app/components/ui/Button";
 
@@ -24,6 +24,15 @@ type JobFormProps = {
 
 export function JobForm({ onSubmit, onCancel, initialData, isEdit = false }: JobFormProps) {
   const [step, setStep] = useState(1);
+
+  const normalizeList = (list: unknown): string[] => {
+    if (!Array.isArray(list)) return [""];
+    const normalized = list
+      .map((v) => (typeof v === "string" ? v : v == null ? "" : String(v)))
+      .map((v) => v.trimEnd());
+    return normalized.length > 0 ? normalized : [""];
+  };
+
   const [formData, setFormData] = useState<JobFormData>({
     title: initialData?.title || "",
     department: initialData?.department || "",
@@ -31,8 +40,8 @@ export function JobForm({ onSubmit, onCancel, initialData, isEdit = false }: Job
     vacancies: initialData?.vacancies || 1,
     employment_type: initialData?.employment_type || "",
     work_mode: initialData?.work_mode || "",
-    requirements: initialData?.requirements && initialData.requirements.length > 0 ? initialData.requirements : [""],
-    responsibilities: initialData?.responsibilities && initialData.responsibilities.length > 0 ? initialData.responsibilities : [""],
+    requirements: normalizeList(initialData?.requirements),
+    responsibilities: normalizeList(initialData?.responsibilities),
   });
 
   const departments = [
@@ -65,13 +74,13 @@ export function JobForm({ onSubmit, onCancel, initialData, isEdit = false }: Job
     "Fujairah",
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (step === 3) {
       const filteredData = {
         ...formData,
-        requirements: formData.requirements.filter((r) => r.trim() !== ""),
-        responsibilities: formData.responsibilities.filter((r) => r.trim() !== ""),
+        requirements: formData.requirements.filter((r) => (r ?? "").trim() !== ""),
+        responsibilities: formData.responsibilities.filter((r) => (r ?? "").trim() !== ""),
         isActive: true,
       };
       onSubmit(filteredData);
@@ -85,7 +94,11 @@ export function JobForm({ onSubmit, onCancel, initialData, isEdit = false }: Job
   const canProceed = () => {
     if (step === 1) return formData.title.trim() !== "" && formData.department !== "";
     if (step === 2) return formData.location.trim() !== "" && formData.employment_type !== "" && formData.work_mode !== "";
-    if (step === 3) return formData.requirements.some(r => r.trim() !== "" || formData.responsibilities.some(r => r.trim() !== ""));
+    if (step === 3) {
+      const hasRequirement = formData.requirements.some((r) => (r ?? "").trim() !== "");
+      const hasResponsibility = formData.responsibilities.some((r) => (r ?? "").trim() !== "");
+      return hasRequirement || hasResponsibility;
+    }
     return false;
   };
 
@@ -367,7 +380,12 @@ export function JobForm({ onSubmit, onCancel, initialData, isEdit = false }: Job
           {step < 3 ? (
             <Button
               type="button"
-              onClick={() => setStep(step + 1)}
+              onMouseDown={(e) => {
+                // Prevent "click-through" where the Next click lands on the newly rendered
+                // submit button (common when step 3 is already valid in edit mode).
+                e.preventDefault();
+                setStep((s) => s + 1);
+              }}
               disabled={!canProceed()}
               className="flex items-center gap-2 flex-1 sm:flex-initial"
               size="sm"
