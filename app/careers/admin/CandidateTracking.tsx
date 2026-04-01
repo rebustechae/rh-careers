@@ -248,7 +248,16 @@ export function CandidateTracking({ jobIdFilter, onClearFilter }: CandidateTrack
     initialState: { pagination: { pageSize: 10 } },
   });
 
-  if (loading) return <div className="flex justify-center py-12"><div className="size-8 border-4 border-t-slate-900 animate-spin rounded-full" /></div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="flex flex-col items-center gap-4">
+          <div className="size-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+          <p className="font-sans text-slate-600">Loading candidates...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
