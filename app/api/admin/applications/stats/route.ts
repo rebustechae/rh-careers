@@ -15,7 +15,10 @@ async function validateAuth() {
     return { valid: false, error: ERROR_MESSAGES.UNAUTHORIZED, status: 401 };
   }
 
-  const { data: { user }, error } = await supabaseAdmin.auth.getUser(accessToken);
+  const {
+    data: { user },
+    error,
+  } = await supabaseAdmin.auth.getUser(accessToken);
 
   if (error || !user) {
     return { valid: false, error: ERROR_MESSAGES.UNAUTHORIZED, status: 401 };
@@ -37,7 +40,8 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin
       .from("applications")
-      .select("job_id");
+      .select("job_id")
+      .returns<{ job_id: string }[]>();
 
     if (error) {
       logError("Failed to fetch application stats", error);
@@ -55,4 +59,3 @@ export async function GET() {
     return errorResponse(ERROR_MESSAGES.INTERNAL_ERROR, 500);
   }
 }
-

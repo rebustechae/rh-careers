@@ -17,7 +17,6 @@ type Job = {
   vacancies?: number;
   employment_type?: string;
   work_mode?: string;
-  description?: string;
   requirements?: string[];
   responsibilities?: string[];
   applicants: number;
@@ -62,7 +61,6 @@ export function JobManagement({ onJobClick }: JobManagementProps) {
         vacancies: job.vacancies,
         employment_type: job.employment_type,
         work_mode: job.work_mode,
-        description: job.description,
         requirements: job.requirements,
         responsibilities: job.responsibilities,
         applicants: 0,
@@ -137,7 +135,6 @@ export function JobManagement({ onJobClick }: JobManagementProps) {
     vacancies: number;
     employment_type: string;
     work_mode: string;
-    description: string;
     requirements: string[];
     responsibilities: string[];
     isActive: boolean;
@@ -153,7 +150,6 @@ export function JobManagement({ onJobClick }: JobManagementProps) {
           vacancies: newJob.vacancies,
           employment_type: newJob.employment_type,
           work_mode: newJob.work_mode,
-          description: newJob.description,
           requirements: newJob.requirements,
           responsibilities: newJob.responsibilities,
           is_active: newJob.isActive,
@@ -196,7 +192,6 @@ export function JobManagement({ onJobClick }: JobManagementProps) {
     vacancies: number;
     employment_type: string;
     work_mode: string;
-    description: string;
     requirements: string[];
     responsibilities: string[];
     isActive: boolean;
@@ -214,7 +209,6 @@ export function JobManagement({ onJobClick }: JobManagementProps) {
           vacancies: updatedJob.vacancies,
           employment_type: updatedJob.employment_type,
           work_mode: updatedJob.work_mode,
-          description: updatedJob.description,
           requirements: updatedJob.requirements,
           responsibilities: updatedJob.responsibilities,
           is_active: updatedJob.isActive,
@@ -238,7 +232,6 @@ export function JobManagement({ onJobClick }: JobManagementProps) {
                 vacancies: updated.vacancies,
                 employment_type: updated.employment_type,
                 work_mode: updated.work_mode,
-                description: updated.description,
                 requirements: updated.requirements,
                 responsibilities: updated.responsibilities,
                 isActive: updated.is_active ?? j.isActive,
@@ -304,10 +297,10 @@ export function JobManagement({ onJobClick }: JobManagementProps) {
     <div className="space-y-3 sm:space-y-4 lg:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-header font-bold text-slate-900">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-header text-primary">
             Job Management
           </h2>
-          <p className="text-xs sm:text-sm lg:text-base text-slate-600 mt-1">
+          <p className="text-xs sm:text-sm lg:text-base text-secondary mt-1">
             Manage active job postings and listings ({jobs.length} total)
           </p>
         </div>
@@ -316,8 +309,9 @@ export function JobManagement({ onJobClick }: JobManagementProps) {
             setEditingJob(null);
             setIsSheetOpen(true);
           }}
-          className="flex items-center gap-2 w-full sm:w-auto"
-          size="sm"
+          className="flex items-center gap-2 w-full sm:w-auto "
+          size="md"
+          variant="primary"
         >
           <Plus size={16} />
           <span className="hidden sm:inline">Add New Job</span>
@@ -421,7 +415,6 @@ export function JobManagement({ onJobClick }: JobManagementProps) {
             vacancies: editingJob.vacancies || 1,
             employment_type: editingJob.employment_type || "",
             work_mode: editingJob.work_mode || "",
-            description: editingJob.description || "",
             requirements: editingJob.requirements || [""],
             responsibilities: editingJob.responsibilities || [""],
             isActive: editingJob.isActive,

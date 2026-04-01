@@ -55,7 +55,7 @@ export function AdminDashboard() {
           width: isSidebarOpen ? (isDesktop ? 256 : 280) : (isDesktop ? 64 : 64),
         }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="bg-primary text-white flex flex-col h-screen overflow-hidden shrink-0"
+        className="bg-secondary text-white flex flex-col h-screen overflow-hidden shrink-0"
       >
         <div className={`p-3 sm:p-4 border-b border-slate-600 flex items-center ${isSidebarOpen ? "justify-between" : "justify-center"}`}>
           <div className={`overflow-hidden transition-all duration-300 ${isSidebarOpen ? "opacity-100 w-auto" : "opacity-0 w-0"}`}>
@@ -87,8 +87,8 @@ export function AdminDashboard() {
                   showText ? "gap-3 px-3 sm:px-4 justify-start" : "justify-center px-2"
                 } py-2.5 sm:py-3 ${
                   isActive
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
+                    ? "bg-[#3a506e] text-white"
+                    : "text-slate-300 hover:bg-[#3a506e] hover:text-white"
                 }`}
                 title={!showText ? item.label : undefined}
               >
